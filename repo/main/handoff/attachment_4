@@ -1,0 +1,394 @@
+You are continuing as the Chief Architect for **Denovate — Service Reliability Memory Agent (SRMA)**.
+
+The seven initial project documents have been drafted:
+
+1. `requirements.md`
+2. `architecture.md`
+3. `data-model.md`
+4. `api-contracts.md`
+5. `hindsight-integration.md`
+6. `implementation-plan.md`
+7. `demo-plan.md`
+
+Your next responsibility is to review these documents against the findings below, correct inconsistencies, and prepare the project for parallel implementation.
+
+Do not redesign the project unnecessarily. Preserve sound architectural decisions and make targeted corrections.
+
+# 1. Project Context
+
+We are building an AI-powered Service Reliability Memory Agent.
+
+The application must:
+
+- Retain engineer-confirmed incident experiences.
+- Recall relevant historical incidents when new incidents occur.
+- Explain why historical incidents are relevant and how they differ.
+- Identify recurring patterns across multiple incidents using Hindsight Reflect.
+- Distinguish observed facts, historical evidence, inferences and unverified claims.
+- Keep all recommendations advisory.
+
+The core architectural principle is:
+
+**Hindsight finds candidates; the application database verifies them.**
+
+SQLite is authoritative for incident records, root causes, resolution status and outcomes. Hindsight provides persistent memory, retrieval and reflection.
+
+# 2. Hard Constraints
+
+- Final submission deadline: November 7, 2026, 11:59 PM IST.
+- Only one submission per team; all six members must agree.
+- Hindsight is mandatory.
+- Band AI Desktop is also mandatory, but the exact meaning of its required use remains unclear. Do not invent an interpretation. Record this as an organiser clarification.
+- Articles and social posts must not mention the word "hackathon", including hashtags.
+- The video must be publicly accessible on YouTube.
+- Article word-count conflict: one section says 800–1,500 words; another says 1,200–2,000 words. The proposed compromise is 1,200–1,500 words, pending organiser clarification.
+- Synthetic data only.
+- No real production integrations.
+- No authentication.
+- No multi-agent architecture.
+- No Kubernetes.
+- No unnecessary infrastructure or features.
+
+# 3. Required Corrections
+
+## A. Hindsight API integration
+
+The original `hindsight-integration.md` explicitly states that its API assumptions have not been verified.
+
+The current documented Python client interface includes asynchronous methods:
+
+- `aretain`
+- `arecall`
+- `areflect`
+
+The synchronous counterparts are also available.
+
+The documented Cloud client setup uses:
+
+- Python package: `hindsight-client`
+- Client: `Hindsight`
+- Cloud base URL: `https://api.hindsight.vectorize.io`
+- API key authentication.
+
+The documented retain operation includes parameters such as:
+
+- `bank_id`
+- `content`
+- `timestamp`
+- `context`
+- `document_id`
+- `metadata`
+- `tags`
+- `update_mode`
+- `retain_async`
+
+The recall operation includes parameters such as:
+
+- `bank_id`
+- `query`
+- `types`
+- `max_tokens`
+- `budget`
+- `trace`
+- `query_timestamp`
+
+Reflect supports a bank ID, query and additional configuration parameters.
+
+These are preliminary findings, not permission to assume every signature or response shape without checking the installed SDK version.
+
+Your tasks:
+
+1. Inspect the current official Hindsight documentation.
+2. Inspect the actual Python SDK version selected for the project.
+3. Verify every method, parameter, return type and relevant exception.
+4. Prefer asynchronous methods in FastAPI request handlers.
+5. Update `hindsight-integration.md` with verified information.
+6. Update `api-contracts.md` to reflect the actual adapter interface.
+7. Record the exact SDK version used.
+8. Include working request/response examples from the actual spike.
+9. Explicitly distinguish documented behaviour from experimentally verified behaviour.
+10. Do not fabricate API signatures, response fields or guarantees.
+
+The Hindsight owner must run a real Cloud smoke test covering:
+
+- Bank creation or retrieval.
+- Retain.
+- Recall.
+- Reflect.
+- Returned object structure.
+- Source identifier availability.
+- Retain latency.
+- Immediate recallability after retention.
+- Duplicate `document_id` behaviour.
+- `update_mode="replace"` and `"append"` behaviour, if supported by the selected version.
+
+Do not mark Task 2 complete until the actual spike results are recorded.
+
+## B. Hindsight adapter
+
+All Hindsight calls must remain isolated behind one adapter module.
+
+The rest of the application must not import or invoke the Hindsight SDK directly.
+
+The adapter must:
+
+- Expose stable application-level interfaces.
+- Normalise SDK response objects into internal models.
+- Handle SDK exceptions.
+- Handle empty recall results.
+- Handle missing source identifiers.
+- Handle malformed or unexpected responses.
+- Support a fake implementation for parallel development.
+- Avoid leaking Hindsight-specific response structures into application code.
+
+Do not let unverified SDK assumptions spread across the codebase.
+
+## C. Evidence and Reflect validation
+
+The existing design validates whether incident IDs returned by Reflect exist in SQLite.
+
+That is necessary but insufficient.
+
+A valid incident ID does not establish that a claim about that incident is correct.
+
+Implement the following validation approach:
+
+1. Extract incident IDs referenced by Reflect.
+2. Verify every ID against SQLite.
+3. Fetch authoritative incident records.
+4. Do not accept Reflect's free-form claims about confirmed root causes or resolutions without checking the database.
+5. Render confirmed root causes and outcomes from authoritative database records.
+6. Treat cross-incident interpretations as insights supported by references to their underlying evidence.
+7. Mark unsupported conclusions as `TO_VERIFY` or suppress them.
+8. Never convert an inferred relationship into a confirmed causal relationship.
+
+Preserve the evidence labels:
+
+- `OBSERVED`
+- `HISTORICAL`
+- `INFERRED`
+- `TO_VERIFY`
+
+Update the architecture, data model, API contracts and demo plan wherever necessary.
+
+## D. Resolve-and-retain consistency
+
+The application must not lose an engineer-confirmed resolution merely because Hindsight is unavailable.
+
+Review the current resolve-and-retain flow.
+
+Implement a reliable approach:
+
+1. Persist the incident resolution in SQLite.
+2. Record that a memory-retention operation is pending.
+3. Attempt retention through the adapter.
+4. Record success or failure.
+5. Allow failed retention operations to be retried.
+6. Prevent duplicate or conflicting retention attempts.
+7. Ensure a Hindsight outage does not prevent an incident from being resolved.
+
+Use a lightweight SQLite-backed outbox or equivalent mechanism. Do not introduce a message broker.
+
+Update the data model and API contracts accordingly.
+
+## E. Reflect refresh behaviour
+
+Reflect is currently intended to refresh after every resolved incident.
+
+Review whether this is appropriate for the deadline and expected latency.
+
+The implementation must:
+
+- Preserve the last successful reflection.
+- Avoid blocking incident resolution on Reflect.
+- Handle Reflect failures gracefully.
+- Avoid displaying stale results as newly generated insights.
+- Record when a reflection was last successfully generated.
+- Make it clear when no reflection is available.
+
+Do not introduce elaborate background infrastructure.
+
+## F. Evaluation consistency
+
+There are inconsistencies in the evaluation test count across the documents.
+
+The canonical evaluation suite must contain exactly **10 scripted evaluations: T1–T10**.
+
+Review all seven documents and ensure that:
+
+- The same ten tests are referenced everywhere.
+- Test IDs and descriptions match.
+- The expected behaviour is consistent.
+- The demo plan uses the same test definitions.
+- No obsolete T1–T6 or T1–T8 references remain unless explicitly labelled as superseded.
+
+The evaluation must test:
+
+- Relevant historical recall.
+- Different wording for similar incidents.
+- Failed historical fixes.
+- Misleading symptom-level similarity.
+- Confirmed versus suspected root causes.
+- Unrelated incidents.
+- Missing or incomplete metadata.
+- Cross-incident pattern identification.
+- Empty memory behaviour.
+- Graceful degradation when Hindsight is unavailable.
+
+Do not weaken a test simply because the current implementation fails it.
+
+## G. Memory-on versus memory-off comparison
+
+The comparison must use the same application pipeline.
+
+The only intentional difference should be whether historical recall is enabled.
+
+Measure the actual outcomes during rehearsal.
+
+Do not assume that memory-off will recommend a failed historical fix or that memory-on will always produce a better answer.
+
+Record actual results and explain unexpected outcomes honestly.
+
+## H. Dataset and demo integrity
+
+Preserve the synthetic incident dataset and its intended test cases.
+
+Pay particular attention to:
+
+- INC-001, INC-002 and INC-007: recurring library defect.
+- INC-003: misleading symptom-level match.
+- INC-006: counterexample.
+- INC-008: unconfirmed root cause.
+- INC-009: different wording and missing version information.
+- INC-C1 and INC-C2: negative and partial controls.
+
+The agent must not automatically conclude that INC-009 has the same root cause as the historical incidents.
+
+It should identify the potentially relevant historical pattern, explain the missing information and request verification.
+
+The demo must clearly distinguish a controlled synthetic evaluation from evidence of real-world operational improvement.
+
+# 4. Implementation and Coordination
+
+We have six human team members and five Claude resources.
+
+The human architect owns:
+
+- Architecture and technical decisions.
+- Integration coordination.
+- Contract approval.
+- Code review.
+- Final technical consistency.
+
+The five Claude resources are assigned to:
+
+1. Backend and application database.
+2. Hindsight adapter and integration.
+3. Agent intelligence and incident analysis.
+4. Frontend and user experience.
+5. Testing, synthetic data and deployment.
+
+Review the existing file-ownership map.
+
+Ensure:
+
+- One canonical GitHub repository.
+- Stable API contracts.
+- Clear file ownership.
+- Separate branches or isolated worktrees.
+- No uncontrolled overlapping edits.
+- Integration against fake implementations before real services are ready.
+- Frequent integration and review.
+- No unnecessary dependencies between workstreams.
+
+Keep `MEMORY_BACKEND=fake` and `LLM_BACKEND=fake` available.
+
+Do not block frontend, backend or agent development on the Hindsight spike.
+
+# 5. Scope Protection
+
+The P0 scope remains:
+
+- Incident intake.
+- Incident analysis.
+- Historical recall.
+- Related-incident comparison.
+- Evidence labels.
+- Engineer-confirmed resolution.
+- Retain.
+- Reflect.
+- Memory-on/memory-off comparison.
+- Dashboard.
+- Memory Trace panel.
+- Synthetic seed data.
+- Graceful degradation.
+- Ten scripted evaluations.
+
+P1:
+
+- Correction flow.
+- Feedback retention.
+- Live-learning incident.
+- Single-container deployment.
+
+P2:
+
+- Dark mode.
+- Report export.
+- Other UI enhancements.
+
+Do not expand the MVP.
+
+# 6. Required Outputs
+
+Update the existing seven documents rather than creating competing versions.
+
+Additionally:
+
+1. Add a clear change summary to your response.
+2. Identify every unresolved assumption.
+3. Identify which assumptions require official documentation verification.
+4. Identify which require a live experiment.
+5. Identify which require organiser clarification.
+6. Produce an updated task allocation for all six human members and five Claude resources.
+7. Provide explicit acceptance criteria for each workstream.
+8. Produce a dependency-aware implementation sequence.
+9. Identify the earliest point at which the team can begin end-to-end integration.
+10. Identify the features that must be frozen to protect the submission deadline.
+
+# 7. Working Rules
+
+- Do not rewrite documents merely to make them look polished.
+- Do not silently change approved architectural decisions.
+- Do not invent Hindsight API behaviour.
+- Do not claim an experiment passed unless it was actually executed.
+- Do not mark an unresolved assumption as verified.
+- Do not add technologies without a concrete justification.
+- Do not spend hours perfecting documentation while implementation is waiting.
+- Prioritise a working, demonstrable vertical slice.
+- Preserve the official evaluation criteria:
+
+| Criterion | Weight |
+|---|---:|
+| Innovation | 30% |
+| Use of Hindsight Memory | 25% |
+| Technical Implementation | 20% |
+| User Experience | 15% |
+| Real-world Impact | 10% |
+
+Every major implementation decision should be evaluated against these criteria.
+
+# 8. Your First Response
+
+Before modifying files, provide:
+
+1. A concise list of the inconsistencies and risks you found.
+2. A list of proposed document changes.
+3. A list of Hindsight details that still require live verification.
+4. A list of decisions that require human approval.
+
+Then proceed with the document updates.
+
+**Do not wait for the Hindsight spike to begin correcting the architecture, contracts, evaluation suite and implementation plan.** Mark unverified Hindsight details clearly and keep the adapter isolated.
+
+The immediate objective is to make the architecture implementation-ready without allowing uncertain API assumptions to contaminate the rest of the project.

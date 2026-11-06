@@ -1,0 +1,158 @@
+Perform an additional consistency audit across all seven project documents. The previous review prompt did not explicitly cover every issue identified in the original files.
+
+Do not redesign the architecture. Correct the following issues and report any additional inconsistencies you discover.
+
+## 1. Evaluation scope contradiction
+
+`requirements.md` currently defines:
+
+- F14: Eval harness is P1, with P0-lite consisting of six scripted checks.
+- Acceptance criteria A1–A9.
+- `demo-plan.md` defines ten tests, T1–T10.
+
+The implementation plan also references acceptance criteria and evaluation milestones inconsistently.
+
+**Required correction:**
+- T1–T10 must be the canonical evaluation suite.
+- Evaluation infrastructure and all ten scripted checks must be P0.
+- Update F14, acceptance criteria, implementation milestones and all references.
+- Ensure the acceptance criteria and T1–T10 are complementary rather than contradictory.
+- Do not leave obsolete six-test or eight-test references.
+
+## 2. Hindsight and Groq architecture ambiguity
+
+`architecture.md` contains an arrow suggesting Hindsight Cloud uses Groq for its own extraction and reflection.
+
+This must not be assumed.
+
+- Verify whether Hindsight Cloud uses its own managed model or supports a configurable external model.
+- Distinguish the application's Groq integration from Hindsight's internal model configuration.
+- Remove or correct the diagram arrow if it is misleading.
+- Do not imply that configuring the application's Groq key configures Hindsight's internal model.
+
+## 3. Retain status and outbox consistency
+
+The current documents use several states:
+
+- `pending`
+- `synced`
+- `failed`
+- `not_applicable`
+
+However, the adapter interface currently describes only `synced|failed`, while the resolve endpoint can return `pending`.
+
+After implementing the SQLite-backed outbox:
+
+- Define one canonical retention lifecycle.
+- Specify which component owns each state transition.
+- Define retry behaviour and duplicate prevention.
+- Define what happens when the process terminates between DB persistence and Hindsight retention.
+- Ensure the API response and database state cannot contradict each other.
+- Ensure the Memory Trace accurately reflects pending, successful and failed operations.
+
+Update `data-model.md`, `api-contracts.md`, `architecture.md` and `implementation-plan.md`.
+
+## 4. Demo reset and shared Hindsight bank safety
+
+`api-contracts.md` currently defines `/api/demo/reset` as wiping the application DB and development bank.
+
+The project uses shared Cloud banks.
+
+- Verify the actual bank deletion/reset capabilities.
+- Ensure resetting demo data cannot accidentally destroy shared development data.
+- Separate demo and development bank identifiers.
+- Restrict destructive reset functionality to explicit demo mode.
+- Document exactly what is deleted from SQLite and Hindsight.
+- If safe selective deletion cannot be guaranteed, use a fresh demo bank instead of destructive reset.
+
+## 5. Recall provenance and enrichment
+
+The current design uses `document_id` where available and extracts `INC-###` from recalled text otherwise.
+
+Clarify:
+
+- Whether `document_id` is actually returned by the selected SDK version.
+- Whether one retained document can produce multiple recall hits.
+- How duplicate hits are deduplicated.
+- How multiple hits belonging to the same incident are consolidated.
+- What happens when an extracted incident ID is malformed or does not exist in SQLite.
+- Whether the relevance score is actually available and what its semantics are.
+
+Do not assume every recalled hit maps one-to-one to an incident.
+
+## 6. Reflect output contract
+
+The current API returns free-form Markdown and extracts incident IDs using a regular expression.
+
+Review the risks of this approach.
+
+- Define how supporting incident IDs are extracted and validated.
+- Separate Reflect's generated interpretation from authoritative incident facts.
+- Ensure unsupported claims are not presented as confirmed.
+- Define the behaviour when Reflect returns no IDs, invalid IDs or contradictory information.
+- Preserve the raw Reflect response for traceability if appropriate.
+- Keep the UI rendering safe and prevent untrusted Markdown from introducing unsafe HTML.
+
+## 7. Memory lifecycle and correction semantics
+
+The data model says re-retaining an incident with the same `document_id` updates rather than duplicates, but this remains unverified.
+
+The correction flow is P1, while the memory model already includes superseded root causes.
+
+Clarify:
+
+- What happens when an engineer corrects a previously retained root cause.
+- Whether the old memory is replaced, appended to or retained alongside a correction.
+- How the application DB represents the authoritative version.
+- How historical retrieval avoids presenting superseded information as current truth.
+- What happens if correction persistence succeeds but Hindsight updating fails.
+
+Do not implement correction functionality beyond P0 unless necessary for data integrity.
+
+## 8. Stack and version consistency
+
+Audit all documents for consistent technology and version references:
+
+- Python version.
+- FastAPI.
+- Pydantic v2.
+- SQLAlchemy.
+- React.
+- Vite.
+- TypeScript.
+- Hindsight SDK.
+- Groq client and model identifiers.
+
+The architecture diagram, implementation plan, API contracts and environment-variable documentation must agree.
+
+Do not invent package versions. Mark unselected versions as pending and recommend compatible versions for the team to freeze.
+
+## 9. Timeline and milestone consistency
+
+Verify that:
+
+- The Hindsight spike blocks only real Hindsight integration, not fake-backed development.
+- API contracts are frozen early enough for parallel work.
+- The first end-to-end fake-backed vertical slice has a clear acceptance gate.
+- Real Hindsight integration has a clear acceptance gate.
+- Feature freeze precedes code freeze.
+- Video, content and submission tasks have named owners.
+- The submission buffer is protected.
+
+The timeline must be achievable within the actual remaining time. Do not assume the team has a fresh 36 hours.
+
+## 10. Final output
+
+After making corrections:
+
+1. Provide a document-by-document change summary.
+2. List every contradiction discovered and how it was resolved.
+3. List unresolved decisions requiring human approval.
+4. List unverified Hindsight assumptions separately from verified API facts.
+5. Confirm that all seven documents use consistent terminology, status values, endpoint contracts and evaluation IDs.
+6. Confirm that no P0 requirement has silently been moved to P1 or P2.
+7. Provide the final implementation-ready document set.
+
+Do not claim the Hindsight integration is verified until the real spike has been executed.
+
+Prioritise correctness, consistency and implementation readiness over document polish.
